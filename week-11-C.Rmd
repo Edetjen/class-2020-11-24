@@ -8,6 +8,7 @@ knitr::opts_chunk$set(echo = FALSE)
 library(PPBDS.data)
 library(rstanarm)
 library(tidyverse)
+library(tidymodels)
 
 # Same data clean up as last week.
 
@@ -16,7 +17,9 @@ week_11 <- shaming %>%
   mutate(age = 2006 - birth_year) %>% 
   mutate(treatment = fct_relevel(treatment, "Control")) %>% 
   mutate(solo = ifelse(hh_size == 1, TRUE, FALSE)) %>% 
-  select(-general_04, -no_of_names, -birth_year, -hh_size) 
+  select(-general_04, -no_of_names, -birth_year, -hh_size) %>%
+  rep_sample_n(1000)
+
 ```
 
 
@@ -30,19 +33,60 @@ primary_06 ~ solo + primary_04 + treatment + solo:treatment
 
 * Which data set should you use to fit the model? Explain why.
 
+# Full dataset 
+
 * Interpret the fitted model. Should we keep all these variables? And the interaction term?
 
+Intercept: when all of our predictors are equal to zero
 
+
+```{r}
+
+fit_1 <- stan_glm(data = week_11,
+                  family = gaussian(),
+                  refresh = 0,
+                  formula = primary_06 ~ solo + primary_04 + treatment + solo:treatment)
+
+```
 
 ## Scene 2
 
 **Prompt:** What is the causal effect of receiving the Neighbors postcard as compared to being in the control group? Provide a posterior probability distribution.
+
+```{r}
+
+new_data = tibble(treatment = c("Neighbors", "Control"),
+                  solo = TRUE,
+                  primary_04 = "Yes")
+
+posterior_predict(fit_1, newdata = new_data) %>%
+  as_tibble() %>%
+  mutate(diff = `1` - `2`) %>%
+  ggplot(aes(x = diff)) +
+  geom_histogram(aes(y = after_stat(count / sum(count))), bins = 100)
+  
+
+```
+
 
 * One way to answer this question is to use `posterior_predict()`. Do that. Make it look nice! Write a sentence or two interpreting the answer.
 
 * A second approach uses `posterior_epred()`. Do that. Make it look nice! Write a sentence or two interpreting the answer.
 
 
+```{r}
+
+new_data = tibble(treatment = c("Neighbors", "Control"),
+                  solo = TRUE,
+                  primary_04 = "Yes")
+
+posterior_epred(fit_1, newdata = new_data) %>%
+  as_tibble() %>%
+  mutate(diff = `1` - `2`) %>%
+  ggplot(aes(x = diff)) +
+  geom_histogram(aes(y = after_stat(count / sum(count))), bins = 100)
+
+```
 ## Scene 3
 
 **Prompt:** There are four primary causal effects of interest: each of the four treatments compared, individually, to Control.  Build a big graphic which shows the four posterior probability distributions of the expected values at once. See #preceptors-notes for my version. You do not need to copy my work! Make something better!
@@ -54,9 +98,4 @@ primary_06 ~ solo + primary_04 + treatment + solo:treatment
 ## Optional Question
 
 Use a logistic model --- `stan_glm()` with `family = binomial()` --- to fit the model. How does that change the results above, especially in Scene 2. Chapter 11 provides some relevant discussion?
-
-
-
-
-
 
